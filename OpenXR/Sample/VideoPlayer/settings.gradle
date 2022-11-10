@@ -1,0 +1,2 @@
+rootProject.name='OpenXR_VideoPlayer_Demo'
+include ':app'
