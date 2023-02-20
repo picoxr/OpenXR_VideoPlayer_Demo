@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 The Khronos Group Inc
+// Copyright (c) 2017-2022, The Khronos Group Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -31,7 +31,7 @@ struct IOpenXrProgram {
     virtual bool IsSessionFocused() const = 0;
 
     // Sample input actions and generate haptic feedback.
-    virtual bool PollActions() = 0;
+    virtual void PollActions() = 0;
 
     // Create and submit a frame.
     virtual void RenderFrame() = 0;

@@ -1,29 +1,15 @@
-// Copyright (c) 2017-2020 The Khronos Group Inc.
-//
-// SPDX-License-Identifier: Apache-2.0
-#version 400
-#extension GL_ARB_separate_shader_objects : enable
-#extension GL_ARB_shading_language_420pack : enable
+#version 450
 
-#pragma vertex
-
-layout (std140, push_constant) uniform buf
-{
+layout (binding = 0) uniform UniformBufferObject {
     mat4 mvp;
-} ubuf;
+} ubo;
 
-layout (location = 0) in vec3 Position;
-layout (location = 1) in vec3 Color;
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inTexCoord;
 
-layout (location = 0) out vec4 oColor;
-out gl_PerVertex
-{
-    vec4 gl_Position;
-};
+layout(location = 0) out vec2 fragTexCoord;
 
-void main()
-{
-    oColor.rgb  = Color.rgb;
-    oColor.a  = 1.0;
-    gl_Position = ubuf.mvp * vec4(Position, 1);
+void main() {
+    gl_Position = ubo.mvp * vec4(inPosition, 1.0);
+    fragTexCoord = inTexCoord;
 }

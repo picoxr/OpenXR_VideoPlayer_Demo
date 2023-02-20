@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 PICO Inc, All rights reserved.
+// Copyright (2021-2023) Bytedance Ltd. and/or its affiliates, All rights reserved.
 //
 // This file provides an example of 3D decoding and play.
 //
@@ -37,7 +37,7 @@ public:
 
     ~CPlayer();
 
-    bool setDataSource(const char* source);
+    bool setDataSource(const char* source, int32_t& videoWidth, int32_t& videoHeight);
 
     bool start();
 
@@ -47,11 +47,15 @@ public:
 
     bool releaseFrame(std::shared_ptr<MediaFrame> &frame);
 
+private:
+    void getAlignment(int32_t &width, int32_t &height, int32_t alignment);
+
 public:
     AMediaExtractor* mExtractor;
     AMediaCodec*     mVideoCodec;
     int32_t          mFd;
     bool             mStarted;
+    uint32_t         mAlignment = 16;  //16-byte alignment
 
     std::mutex       mMediaListMutex;
     std::list<std::shared_ptr<MediaFrame>> mMediaList;

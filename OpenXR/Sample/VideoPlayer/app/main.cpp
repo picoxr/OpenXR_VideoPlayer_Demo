@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 The Khronos Group Inc.
+// Copyright (c) 2017-2022, The Khronos Group Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -9,98 +9,26 @@
 #include "platformplugin.h"
 #include "graphicsplugin.h"
 #include "openxr_program.h"
-#include "pController.h"
 
-namespace {
-
-    typedef enum
-    {
-        PXR_HMD_3DOF = 0,
-        PXR_HMD_6DOF
-    } PxrHmdDof;
-
-    typedef enum
-    {
-        PXR_CONTROLLER_3DOF = 0,
-        PXR_CONTROLLER_6DOF
-    } PxrControllerDof;
-
-#ifdef XR_USE_PLATFORM_ANDROID
-void ShowHelp() { Log::Write(Log::Level::Info, "adb shell setprop debug.xr.graphicsPlugin OpenGLES|Vulkan"); }
+void ShowHelp() {
+    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.graphicsPlugin OpenGLES|Vulkan");
+    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.formFactor Hmd|Handheld");
+    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.viewConfiguration Stereo|Mono");
+    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.blendMode Opaque|Additive|AlphaBlend");
+}
 
 bool UpdateOptionsFromSystemProperties(Options& options) {
     char value[PROP_VALUE_MAX] = {};
     if (__system_property_get("debug.xr.graphicsPlugin", value) != 0) {
         options.GraphicsPlugin = value;
     }
-
     // Check for required parameters.
     if (options.GraphicsPlugin.empty()) {
         Log::Write(Log::Level::Warning, "GraphicsPlugin Default OpenGLES");
         options.GraphicsPlugin = "OpenGLES";
     }
-
     return true;
 }
-#else
-void ShowHelp() {
-    // TODO: Improve/update when things are more settled.
-    Log::Write(Log::Level::Info,
-               "HelloXr --graphics|-g <Graphics API> [--formfactor|-ff <Form factor>] [--viewconfig|-vc <View config>] "
-               "[--blendmode|-bm <Blend mode>] [--space|-s <Space>] [--verbose|-v]");
-    Log::Write(Log::Level::Info, "Graphics APIs:            D3D11, D3D12, OpenGLES, OpenGL, Vulkan2, Vulkan");
-    Log::Write(Log::Level::Info, "Form factors:             Hmd, Handheld");
-    Log::Write(Log::Level::Info, "View configurations:      Mono, Stereo");
-    Log::Write(Log::Level::Info, "Environment blend modes:  Opaque, Additive, AlphaBlend");
-    Log::Write(Log::Level::Info, "Spaces:                   View, Local, Stage");
-}
-
-bool UpdateOptionsFromCommandLine(Options& options, int argc, char* argv[]) {
-    int i = 1;  // Index 0 is the program name and is skipped.
-
-    auto getNextArg = [&] {
-        if (i >= argc) {
-            throw std::invalid_argument("Argument parameter missing");
-        }
-
-        return std::string(argv[i++]);
-    };
-
-    while (i < argc) {
-        const std::string arg = getNextArg();
-        if (EqualsIgnoreCase(arg, "--graphics") || EqualsIgnoreCase(arg, "-g")) {
-            options.GraphicsPlugin = getNextArg();
-        } else if (EqualsIgnoreCase(arg, "--formfactor") || EqualsIgnoreCase(arg, "-ff")) {
-            options.FormFactor = getNextArg();
-        } else if (EqualsIgnoreCase(arg, "--viewconfig") || EqualsIgnoreCase(arg, "-vc")) {
-            options.ViewConfiguration = getNextArg();
-        } else if (EqualsIgnoreCase(arg, "--blendmode") || EqualsIgnoreCase(arg, "-bm")) {
-            options.EnvironmentBlendMode = getNextArg();
-        } else if (EqualsIgnoreCase(arg, "--space") || EqualsIgnoreCase(arg, "-s")) {
-            options.AppSpace = getNextArg();
-        } else if (EqualsIgnoreCase(arg, "--verbose") || EqualsIgnoreCase(arg, "-v")) {
-            Log::SetLevel(Log::Level::Verbose);
-        } else if (EqualsIgnoreCase(arg, "--help") || EqualsIgnoreCase(arg, "-h")) {
-            ShowHelp();
-            return false;
-        } else {
-            throw std::invalid_argument(Fmt("Unknown argument: %s", arg.c_str()));
-        }
-    }
-
-    // Check for required parameters.
-    if (options.GraphicsPlugin.empty()) {
-        Log::Write(Log::Level::Error, "GraphicsPlugin parameter is required");
-        ShowHelp();
-        return false;
-    }
-
-    return true;
-}
-#endif
-}  // namespace
-
-#ifdef XR_USE_PLATFORM_ANDROID
 
 struct AndroidAppState {
     ANativeWindow* NativeWindow = nullptr;
@@ -112,7 +40,6 @@ struct AndroidAppState {
  */
 static void app_handle_cmd(struct android_app* app, int32_t cmd) {
     AndroidAppState* appState = (AndroidAppState*)app->userData;
-
     switch (cmd) {
         // There is no APP_CMD_CREATE. The ANativeActivity creates the
         // application thread from onCreate(). The application thread
@@ -126,16 +53,12 @@ static void app_handle_cmd(struct android_app* app, int32_t cmd) {
             Log::Write(Log::Level::Info, "onResume()");
             Log::Write(Log::Level::Info, "    APP_CMD_RESUME");
             appState->Resumed = true;
-            pxr::Pxr_SetEngineVersion("2.8.0.1");
-            pxr::Pxr_StartCVControllerThread(PXR_HMD_6DOF, PXR_CONTROLLER_6DOF);
             break;
         }
         case APP_CMD_PAUSE: {
             Log::Write(Log::Level::Info, "onPause()");
             Log::Write(Log::Level::Info, "    APP_CMD_PAUSE");
             appState->Resumed = false;
-            pxr::Pxr_SetEngineVersion("2.7.0.0");
-            pxr::Pxr_StopCVControllerThread(PXR_HMD_6DOF, PXR_CONTROLLER_6DOF);
             break;
         }
         case APP_CMD_STOP: {
@@ -164,16 +87,6 @@ static void app_handle_cmd(struct android_app* app, int32_t cmd) {
     }
 }
 
-static int32_t onInputEvent(struct android_app* app, AInputEvent* event){
-    int type = AInputEvent_getType(event);
-    if(type == AINPUT_EVENT_TYPE_KEY){
-        int32_t action = AKeyEvent_getAction(event);
-        int32_t code   = AKeyEvent_getKeyCode(event);
-        //Log::Write(Log::Level::Error, Fmt("xxxx:%d:%d\n", code, action));
-        //if(code == 4)  return 1;
-    }
-    return 0;
-}
 /**
  * This is the main entry point of a native application that is using
  * android_native_app_glue.  It runs in its own thread, with its own
@@ -188,7 +101,6 @@ void android_main(struct android_app* app) {
 
         app->userData = &appState;
         app->onAppCmd = app_handle_cmd;
-        app->onInputEvent = onInputEvent;
 
         std::shared_ptr<Options> options = std::make_shared<Options>();
         if (!UpdateOptionsFromSystemProperties(*options)) {
@@ -222,11 +134,12 @@ void android_main(struct android_app* app) {
             initializeLoader((const XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
         }
 
+        program->StartPlayer();
         program->CreateInstance();
         program->InitializeSystem();
         program->InitializeSession();
         program->CreateSwapchains();
-        program->StartPlayer();
+        
         while (app->destroyRequested == 0) {
             // Read all pending events.
             for (;;) {
@@ -246,84 +159,28 @@ void android_main(struct android_app* app) {
             }
 
             program->PollEvents(&exitRenderLoop, &requestRestart);
-            if (!program->IsSessionRunning()) {
-                continue;
-            }
-            if(program->PollActions())
-            {
+
+            if (exitRenderLoop && !requestRestart) {
                 ANativeActivity_finish(app->activity);
             }
-            program->RenderFrame();
-        }
 
-        app->activity->vm->DetachCurrentThread();
-    } catch (const std::exception& ex) {
-        Log::Write(Log::Level::Error, ex.what());
-    } catch (...) {
-        Log::Write(Log::Level::Error, "Unknown Error");
-    }
-}
-#else
-int main(int argc, char* argv[]) {
-    try {
-        // Parse command-line arguments into Options.
-        std::shared_ptr<Options> options = std::make_shared<Options>();
-        if (!UpdateOptionsFromCommandLine(*options, argc, argv)) {
-            return 1;
-        }
-
-        std::shared_ptr<PlatformData> data = std::make_shared<PlatformData>();
-
-        // Spawn a thread to wait for a keypress
-        static bool quitKeyPressed = false;
-        auto exitPollingThread = std::thread{[] {
-            Log::Write(Log::Level::Info, "Press any key to shutdown...");
-            (void)getchar();
-            quitKeyPressed = true;
-        }};
-        exitPollingThread.detach();
-
-        bool requestRestart = false;
-        do {
-            // Create platform-specific implementation.
-            std::shared_ptr<IPlatformPlugin> platformPlugin = CreatePlatformPlugin(options, data);
-
-            // Create graphics API implementation.
-            std::shared_ptr<IGraphicsPlugin> graphicsPlugin = CreateGraphicsPlugin(options, platformPlugin);
-
-            // Initialize the OpenXR program.
-            std::shared_ptr<IOpenXrProgram> program = CreateOpenXrProgram(options, platformPlugin, graphicsPlugin);
-
-            program->CreateInstance();
-            program->InitializeSystem();
-            program->InitializeSession();
-            program->CreateSwapchains();
-
-            while (!quitKeyPressed) {
-                bool exitRenderLoop = false;
-                program->PollEvents(&exitRenderLoop, &requestRestart);
-                if (exitRenderLoop) {
-                    break;
-                }
-
-                if (program->IsSessionRunning()) {
-                    program->PollActions();
-                    program->RenderFrame();
-                } else {
-                    // Throttle loop since xrWaitFrame won't be called.
-                    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-                }
+            if (!program->IsSessionRunning()) {
+                // Throttle loop since xrWaitFrame won't be called.
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                continue;
             }
 
-        } while (!quitKeyPressed && requestRestart);
-
-        return 0;
-    } catch (const std::exception& ex) {
+            program->PollActions();
+            program->RenderFrame();
+        }
+        app->activity->vm->DetachCurrentThread();
+    }
+    catch (const std::exception &ex)
+    {
         Log::Write(Log::Level::Error, ex.what());
-        return 1;
-    } catch (...) {
+    }
+    catch (...)
+    {
         Log::Write(Log::Level::Error, "Unknown Error");
-        return 1;
     }
 }
-#endif

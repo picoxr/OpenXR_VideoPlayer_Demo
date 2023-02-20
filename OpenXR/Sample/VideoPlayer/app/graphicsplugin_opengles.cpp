@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 The Khronos Group Inc.
+// Copyright (c) 2017-2022 The Khronos Group Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -8,6 +8,7 @@
 #include "graphicsplugin.h"
 #include "options.h"
 
+#define XR_USE_GRAPHICS_API_OPENGL_ES 1
 #ifdef XR_USE_GRAPHICS_API_OPENGL_ES
 
 #include "common/gfxwrapper_opengl.h"
@@ -24,7 +25,7 @@ static const char* s_vertexShader = R"_(
     out vec2 vTexCoord;
     void main() {
         vTexCoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);
-        gl_Position = ModelViewProjection * vec4(aPosition.x, aPosition.y, aPosition.z, 1.0);;
+        gl_Position = ModelViewProjection * vec4(aPosition.x, aPosition.y, aPosition.z, 1.0);
     }
 )_";
 
@@ -54,6 +55,14 @@ const GLfloat VERTICES_COORD[] = {
          1.0f, -1.0f, 0.0f,    0.5f, 0.0f,       1.0f, 0.0f,  // bottom right 
         -1.0f, -1.0f, 0.0f,    0.0f, 0.0f,       0.5f, 0.0f,  // bottom left
         -1.0f,  1.0f, 0.0f,    0.0f, 1.0f,       0.5f, 1.0f   // top left
+    };
+
+const GLfloat VERTICES_COORD_2D[] = {
+         // positions        // textureCoords
+         1.0f,  1.0f, 0.0f,   1.0f, 1.0f,  // top right  
+         1.0f, -1.0f, 0.0f,   1.0f, 0.0f,  // bottom right 
+        -1.0f, -1.0f, 0.0f,   0.0f, 0.0f,  // bottom left
+        -1.0f,  1.0f, 0.0f,   0.0f, 1.0f   // top left
     };
 
  const unsigned int s_indices[] = {
@@ -221,6 +230,15 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indices.size() * sizeof(GLuint), m_indices.data(), GL_STATIC_DRAW);
             glVertexAttribPointer(apos, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
             glVertexAttribPointer(atex, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        } else if (m_options->VideoMode == "2D") {
+            m_pose = Translation({0.f, 0.f, -3.0f});
+            XrVector3f scale{1.8, 1.0, 1.0};
+            m_scale = scale;
+
+            glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD_2D), VERTICES_COORD_2D, GL_STATIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(s_indices), s_indices, GL_STATIC_DRAW);
+            glVertexAttribPointer(apos, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+            glVertexAttribPointer(atex, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         }
 
         glUniform1i(texturey, 0); 
@@ -385,15 +403,15 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         XrMatrix4x4f_Multiply(&mvp, &vp, &model);
 
         if (frame.get()) {
-            int alignment = 16;
-            int width = (frame->width + alignment-1) / alignment * alignment;
-            int height = (frame->height + alignment-1) / alignment * alignment;
+            int width = frame->width;
+            int height = frame->height;
             
             if (m_options->VideoMode == "3D-SBS") {
                 GLuint aTexCoord = (GLuint) glGetAttribLocation(m_program, "aTexCoord");
                 int32_t offset = 3 + (eye * 2);
                 glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(offset * sizeof(float)));
                 glEnableVertexAttribArray(aTexCoord);
+            } else if (m_options->VideoMode == "2D" || m_options->VideoMode == "360") {
             }
 
             glActiveTexture(GL_TEXTURE0);
@@ -405,7 +423,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, width / 2, height / 2, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, frame->data + (width * height));
 
             glUniformMatrix4fv(m_modelViewProjectionUniformLocation, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&mvp));
-            if (m_options->VideoMode == "3D-SBS") {
+            
+            if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "2D") {
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             } else if (m_options->VideoMode == "360") {
                 glDrawElements(GL_TRIANGLES, m_indices.size(), GL_UNSIGNED_INT, 0);

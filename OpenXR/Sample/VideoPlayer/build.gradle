@@ -2,19 +2,21 @@ def OBOE_SDK_ROOT = file("${buildDir}/Oboe")
 
 buildscript {
     repositories {
-        maven{ url'http://maven.aliyun.com/nexus/content/groups/public/'}
+        maven{ allowInsecureProtocol = true
+            url'http://maven.aliyun.com/nexus/content/groups/public/'}
         google()
         jcenter()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.6.1'
+        classpath 'com.android.tools.build:gradle:7.2.2'
     }
 }
 
 allprojects {
     repositories {
-        maven{ url'http://maven.aliyun.com/nexus/content/groups/public/'}
+        maven{ allowInsecureProtocol = true 
+            url'http://maven.aliyun.com/nexus/content/groups/public/'}
         google()
         jcenter()
     }
@@ -24,7 +26,6 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 29
-    buildToolsVersion "29.0.3"
 
     defaultConfig {
         applicationId "com.khronos.player"

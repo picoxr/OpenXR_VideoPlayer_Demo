@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 The Khronos Group Inc
+// Copyright (c) 2017-2022 The Khronos Group Inc
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -38,6 +38,8 @@ struct IGraphicsPlugin {
 
     virtual void RenderView(const XrCompositionLayerProjectionView& layerView, const XrSwapchainImageBaseHeader* swapchainImage,
                             int64_t swapchainFormat, const std::shared_ptr<MediaFrame>& frame, const int32_t eye) {};
+
+    virtual void SetVideoWidthHeight(int32_t videoWidth, int32_t videoHeight) {};
 
     // Get recommended number of sub-data element samples in view (recommendedSwapchainSampleCount)
     // if supported by the graphics plugin. A supported value otherwise.

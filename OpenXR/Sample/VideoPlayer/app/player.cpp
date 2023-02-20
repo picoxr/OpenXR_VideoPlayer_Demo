@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 PICO Inc, All rights reserved.
+// Copyright (2021-2023) Bytedance Ltd. and/or its affiliates, All rights reserved.
 //
 // This file provides an example of 3D decoding and play.
 //
@@ -28,7 +28,7 @@ CPlayer::~CPlayer() {
     }
 }
 
-bool CPlayer::setDataSource(const char* source) {
+bool CPlayer::setDataSource(const char* source, int32_t& videoWidth, int32_t& videoHeight) {
     if (mExtractor == nullptr) {
         mExtractor = AMediaExtractor_new();
         if (mExtractor == nullptr) {
@@ -64,6 +64,17 @@ bool CPlayer::setDataSource(const char* source) {
 
     size_t track = AMediaExtractor_getTrackCount(mExtractor);
     Log::Write(Log::Level::Error, Fmt("setDataSource success, file size %d track = %d", fileLen, track));
+    for (auto i = 0; i < track; i++) {
+        const char *mime = nullptr;
+        AMediaFormat *format = AMediaExtractor_getTrackFormat(mExtractor, i);
+        AMediaFormat_getString(format, "mime", &mime);
+        if (strstr(mime, "video")) {
+            AMediaFormat_getInt32(format, "width", &videoWidth);
+            AMediaFormat_getInt32(format, "height", &videoHeight);
+            getAlignment(videoWidth, videoHeight, mAlignment);
+            Log::Write(Log::Level::Error, Fmt("setDataSource video width:%d height:%d", videoWidth, videoHeight));
+        }
+    }
     return true;
 }
 
@@ -99,6 +110,7 @@ bool CPlayer::start() {
                 videoTrackIndex = i;
                 AMediaFormat_getInt32(format, "width", &videoWidth);
                 AMediaFormat_getInt32(format, "height", &videoHeight);
+                getAlignment(videoWidth, videoHeight, mAlignment);
                 videoCodec = AMediaCodec_createDecoderByType(mime);
                 if (videoCodec == nullptr) {
                     Log::Write(Log::Level::Error, Fmt("create mediacodec %s error", mime));
@@ -264,7 +276,6 @@ bool CPlayer::start() {
         Log::Write(Log::Level::Error, Fmt("exit thread......"));
     }).detach();
 
-
     return true;
 }
 
@@ -295,4 +306,9 @@ bool CPlayer::releaseFrame(std::shared_ptr<MediaFrame> &frame) {
         mMediaList.pop_front();
     }
     return true;
+}
+
+void CPlayer::getAlignment(int32_t &width, int32_t &height, int32_t alignment) {
+    width = (width + alignment - 1) / alignment * alignment;
+    height = (height + alignment - 1) / alignment * alignment;
 }
