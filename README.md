@@ -15,7 +15,7 @@
     Demo of VR video player for 360 video format.
 
   - Scene： 2D
-  - Demo of VR video player for 2D video format.
+    Demo of VR video player for 2D video format.
 
 ### How select video mode and Specify video file name
   In the `cpp/app/options.h` file `VideoMode` field indicates videomode and `VideoFileName` indicates the video file used to playback. GraphicsPlugin filed indicates what rendering API to use, you can specify `OpenGLES` or `Vulkan2`.
