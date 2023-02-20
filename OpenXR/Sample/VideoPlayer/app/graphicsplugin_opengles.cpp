@@ -8,7 +8,6 @@
 #include "graphicsplugin.h"
 #include "options.h"
 
-#define XR_USE_GRAPHICS_API_OPENGL_ES 1
 #ifdef XR_USE_GRAPHICS_API_OPENGL_ES
 
 #include "common/gfxwrapper_opengl.h"
