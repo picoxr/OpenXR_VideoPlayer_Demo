@@ -1,5 +1,5 @@
 ## OpenXR_VideoPlayer_Demo
-  - If you have any questions/comments, please visit [**Pico Developer Answers**](https://devanswers.pico-interactive.com/) and raise your question there.
+  - If you have any questions/comments, please visit [**Pico Developer community**](https://devanswers.pico-interactive.com/) and raise your question there.
 
 ## OpenXR SDK Version
   - v2.1.0
