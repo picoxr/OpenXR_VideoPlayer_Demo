@@ -41,6 +41,12 @@ struct IGraphicsPlugin {
 
     virtual void SetVideoWidthHeight(int32_t videoWidth, int32_t videoHeight) {};
 
+    struct controllerInputAction {
+        float x;
+        float y;
+    };
+    virtual void SetInputAction(int hand /*0-left, 1-right*/, controllerInputAction &input) {};
+
     // Get recommended number of sub-data element samples in view (recommendedSwapchainSampleCount)
     // if supported by the graphics plugin. A supported value otherwise.
     virtual uint32_t GetSupportedSwapchainSampleCount(const XrViewConfigurationView& view) {

@@ -852,8 +852,8 @@ struct PipelineLayout {
         m_memAllocator->createBuffer(width * height, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, yuvBuffer_y, yuvBufferMemory_y);
         m_memAllocator->createBuffer(width * height / 4, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, yuvBuffer_u, yuvBufferMemory_u);
         m_memAllocator->createBuffer(width * height / 4, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, yuvBuffer_v, yuvBufferMemory_v);
-        vkMapMemory(m_vkDevice, yuvBufferMemory_u, 0, width * height, 0, &yuvBufferMemoryMapped_u);
-        vkMapMemory(m_vkDevice, yuvBufferMemory_y, 0, width * height / 4, 0, &yuvBufferMemoryMapped_y);
+        vkMapMemory(m_vkDevice, yuvBufferMemory_y, 0, width * height, 0, &yuvBufferMemoryMapped_y);
+        vkMapMemory(m_vkDevice, yuvBufferMemory_u, 0, width * height / 4, 0, &yuvBufferMemoryMapped_u);
         vkMapMemory(m_vkDevice, yuvBufferMemory_v, 0, width * height / 4, 0, &yuvBufferMemoryMapped_v);
 
         createImage(width, height, g_imageFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage_y, textureImageMemory_y);
@@ -910,16 +910,19 @@ struct PipelineLayout {
         samplerInfo.pNext = nullptr;
         samplerInfo.magFilter = VK_FILTER_LINEAR;
         samplerInfo.minFilter = VK_FILTER_LINEAR;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.mipLodBias = 0.0f;
         samplerInfo.anisotropyEnable = VK_TRUE;
         samplerInfo.maxAnisotropy = 1;
-        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
         samplerInfo.compareEnable = VK_FALSE;
         samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.minLod = 0.0f;
+        samplerInfo.maxLod = 1.0f;
+        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
         CHECK_VKCMD(vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &textureSampler_y));
         CHECK_VKCMD(vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &textureSampler_u));
         CHECK_VKCMD(vkCreateSampler(m_vkDevice, &samplerInfo, nullptr, &textureSampler_v));
@@ -1159,8 +1162,7 @@ struct DepthBuffer {
         return *this;
     }
 
-    void Create(VkDevice device, MemoryAllocator* memAllocator, VkFormat depthFormat,
-                const XrSwapchainCreateInfo& swapchainCreateInfo) {
+    void Create(VkDevice device, MemoryAllocator* memAllocator, VkFormat depthFormat, const XrSwapchainCreateInfo& swapchainCreateInfo) {
         m_vkDevice = device;
 
         VkExtent2D size = {swapchainCreateInfo.width, swapchainCreateInfo.height};
@@ -1207,7 +1209,7 @@ struct DepthBuffer {
     DepthBuffer(const DepthBuffer&) = delete;
     DepthBuffer& operator=(const DepthBuffer&) = delete;
 
-   private:
+private:
     VkDevice m_vkDevice{VK_NULL_HANDLE};
     VkImageLayout m_vkLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
@@ -1264,7 +1266,7 @@ struct SwapchainImageContext {
         renderPassBeginInfo->renderArea.extent = size;
     }
 
-   private:
+private:
     VkDevice m_vkDevice{VK_NULL_HANDLE};
 };
 
@@ -1425,12 +1427,12 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
     }
 
     void InitializeResources() {
-        std::vector<uint32_t> vertexSPIRV =
+        std::vector<uint32_t> vertexSPIRV = {
 #include "vulkan_shaders/vert.spv"
-            ;
-        std::vector<uint32_t> fragmentSPIRV =
+        };
+        std::vector<uint32_t> fragmentSPIRV = {
 #include "vulkan_shaders/frag.spv"
-            ;
+        };
         if (vertexSPIRV.empty()) {THROW("Failed to compile vertex shader");}
         if (fragmentSPIRV.empty()) {THROW("Failed to compile fragment shader");}
 
@@ -1456,9 +1458,9 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
 
 
         if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "2D") {
-            XrVector3f scale{18, 10, 1.0};
+            XrVector3f scale{1.8, 1.0, 1.0};
             m_scale = scale;
-            m_pose = Translation({0.f, 0.f, -20.0f});
+            m_pose = Translation({0.f, 0.f, m_disdance});
         } else if (m_options->VideoMode == "360") {
             XrVector3f scale{1.0, 1.0, 1.0};
             m_scale = scale;
@@ -1514,7 +1516,7 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
         swapchainContext->depthBuffer.TransitionLayout(&m_cmdBuffer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
         // Bind and clear eye render target
-        static XrColor4f darkSlateGrey = {0.184313729f, 0.309803933f, 0.309803933f, 1.0f};
+        static XrColor4f darkSlateGrey = {m_backgroundColor[0], m_backgroundColor[1], m_backgroundColor[2], m_backgroundColor[3]};
         static std::array<VkClearValue, 2> clearValues;
         clearValues[0].color.float32[0] = darkSlateGrey.r;
         clearValues[0].color.float32[1] = darkSlateGrey.g;
@@ -1532,6 +1534,9 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
 
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(m_cmdBuffer.buf, 0, 1, &m_drawBuffer.vertexBuffer, &offset);
+
+        //modify screen position
+        m_pose.position.z = m_disdance;
 
         XrVector3f scale{1.f, 1.f, 1.f};
         const auto& pose = layerView.pose;
@@ -1573,11 +1578,11 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
             uint32_t size_v = size_y / 4;
             //copy yuv
             memcpy(m_pipelineLayout.yuvBufferMemoryMapped_y, frame->data, size_y);
-            char *bufferu = (char*)m_pipelineLayout.yuvBufferMemoryMapped_u;
+            uint8_t *bufferu = (uint8_t*)m_pipelineLayout.yuvBufferMemoryMapped_u;
             for (int32_t i = size_y; i < frame->size; i += 2) {
                 *bufferu++ = frame->data[i];
             }
-            char *bufferv = (char*)m_pipelineLayout.yuvBufferMemoryMapped_v;
+            uint8_t *bufferv = (uint8_t*)m_pipelineLayout.yuvBufferMemoryMapped_v;
             for (int32_t i = size_y; i < frame->size; i += 2) {
                 *bufferv++ = frame->data[i+1];
             }
@@ -1648,6 +1653,17 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
         m_videoWidth = videoWidth;
     };
 
+    void SetInputAction(int hand /*0-left, 1-right*/, controllerInputAction &input) override {
+        m_disdance += input.y * (-0.01f);
+        if (m_disdance > -0.1f) {
+            m_disdance = -0.1f;
+        }
+
+        float ratio = m_scale.x / m_scale.y;
+        m_scale.x += input.x * 0.01f * ratio;
+        m_scale.y += input.x * 0.01f;
+    };
+
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
         VkCommandBuffer commandBuffer = m_cmdBuffer.beginSingleTimeCommands();
         VkBufferImageCopy region{};
@@ -1664,7 +1680,7 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
         m_cmdBuffer.endSingleTimeCommands(commandBuffer);
     }
 
-   protected:
+protected:
     XrGraphicsBindingVulkan2KHR m_graphicsBinding{XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR};
     std::list<SwapchainImageContext> m_swapchainImageContexts;
     std::map<const XrSwapchainImageBaseHeader*, SwapchainImageContext*> m_swapchainImageContextMap;
@@ -1688,6 +1704,8 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
     float m_radius = 50;
     int32_t m_videoWidth;
     int32_t m_videoHeight;
+    float m_backgroundColor[4] = {0.01f, 0.01f, 0.01f, 1.0f};
+    float m_disdance = -3.0f;
 
     PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT{nullptr};
     PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT{nullptr};

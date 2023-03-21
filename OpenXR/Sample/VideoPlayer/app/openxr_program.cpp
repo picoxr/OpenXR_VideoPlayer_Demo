@@ -818,6 +818,8 @@ struct OpenXrProgram : IOpenXrProgram {
 
         // Get pose and grab action state and start haptic vibrate when hand is 90% squeezed.
         for (auto hand : {Side::LEFT, Side::RIGHT}) {
+            IGraphicsPlugin::controllerInputAction input{};
+
             XrActionStateGetInfo getInfo{XR_TYPE_ACTION_STATE_GET_INFO};
             getInfo.subactionPath = m_input.handSubactionPath[hand];
 
@@ -862,8 +864,8 @@ struct OpenXrProgram : IOpenXrProgram {
             XrActionStateVector2f joystickValue{XR_TYPE_ACTION_STATE_VECTOR2F};
             CHECK_XRCMD(xrGetActionStateVector2f(m_session, &getInfo, &joystickValue));
             if (joystickValue.isActive == XR_TRUE) {
-                // joystickValue.currentState.x;
-                // joystickValue.currentState.y;
+                input.x = joystickValue.currentState.x;
+                input.y = joystickValue.currentState.y;
             }
 
             //trigger value
@@ -943,6 +945,8 @@ struct OpenXrProgram : IOpenXrProgram {
                     Log::Write(Log::Level::Error, Fmt("pico keyevent Y button pressed %d", hand));
                 }
             }
+
+            m_graphicsPlugin->SetInputAction(hand, input);
         }
     }
 

@@ -14,7 +14,7 @@
 #include <common/xr_linear.h>
 
 namespace {
-constexpr float DarkSlateGray[] = {0.184313729f, 0.309803933f, 0.309803933f, 1.0f};
+constexpr float DarkSlateGray[] = {0.01f, 0.01f, 0.01f, 1.0f};
 
 static const char* s_vertexShader = R"_(
     #version 320 es
@@ -41,9 +41,9 @@ static const char* s_fragmentShader = R"_(
         yuv.r = texture(yTexture, vTexCoord).r;
         yuv.g = texture(uvTexture, vTexCoord).r - 0.5;
         yuv.b = texture(uvTexture, vTexCoord).a - 0.5;
-        rgb = mat3 (1.0,     1.0,      1.0,
-                    0.0,     0.39465,  2.03211,
-                    1.13983, -0.5806,  0.0) * yuv;
+        rgb = mat3 (1.0,      1.0,      1.0,
+                    0.0,     -0.21482,  2.12798,
+                    1.28033, -0.38059,  0.0) * yuv;
         outColor = vec4(rgb, 1);
     }
 )_";
@@ -396,6 +396,9 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         XrMatrix4x4f vp;
         XrMatrix4x4f_Multiply(&vp, &proj, &view);
 
+        //modify screen position
+        m_pose.position.z = m_disdance;
+
         XrMatrix4x4f model;
         XrMatrix4x4f mvp;
         XrMatrix4x4f_CreateTranslationRotationScale(&model, &m_pose.position, &m_pose.orientation, &m_scale);
@@ -479,6 +482,17 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         Log::Write(Log::Level::Error, Fmt("m_point:%d, m_vertexCount:%d, m_indicesCount:%d ", m_vertexCoordData.size(), m_vertexCount, m_indices.size()));
     }
 
+    void SetInputAction(int hand /*0-left, 1-right*/, controllerInputAction &input) override {
+        m_disdance += input.y * (-0.01f);
+        if (m_disdance > -0.1f) {
+            m_disdance = -0.1f;
+        }
+
+        float ratio = m_scale.x / m_scale.y;
+        m_scale.x += input.x * 0.01f * ratio;
+        m_scale.y += input.x * 0.01f;
+    };
+
    private:
 #ifdef XR_USE_PLATFORM_ANDROID
     XrGraphicsBindingOpenGLESAndroidKHR m_graphicsBinding{XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR};
@@ -501,6 +515,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
     XrPosef m_pose = Translation({0.f, 0.f, -3.0f});
     XrVector3f m_scale{1.8, 1.0, 1.0};
+    float m_disdance = -3.0f;
 };
 }  // namespace
 
