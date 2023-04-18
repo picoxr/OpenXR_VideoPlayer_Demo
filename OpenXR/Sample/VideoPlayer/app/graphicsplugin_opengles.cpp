@@ -56,6 +56,14 @@ const GLfloat VERTICES_COORD[] = {
         -1.0f,  1.0f, 0.0f,    0.0f, 1.0f,       0.5f, 1.0f   // top left
     };
 
+const GLfloat VERTICES_COORD_OU[] = {  //over under
+         // positions        //left textureCoords  //right textureCoords
+         1.0f,  1.0f, 0.0f,    1.0f, 1.0f,       1.0f, 0.5f,  // top right  
+         1.0f, -1.0f, 0.0f,    1.0f, 0.5f,       1.0f, 0.0f,  // bottom right 
+        -1.0f, -1.0f, 0.0f,    0.0f, 0.5f,       0.0f, 0.0f,  // bottom left
+        -1.0f,  1.0f, 0.0f,    0.0f, 1.0f,       0.0f, 0.5f   // top left
+    };
+
 const GLfloat VERTICES_COORD_2D[] = {
          // positions        // textureCoords
          1.0f,  1.0f, 0.0f,   1.0f, 1.0f,  // top right  
@@ -208,18 +216,21 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glEnableVertexAttribArray(apos);
         glEnableVertexAttribArray(atex);
 
-        if (m_options->VideoMode == "3D-SBS") {
-            //set pose and scale when video mode is 3D-SBS
+        if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU") {
+            //set pose and scale when video mode is 3D-SBS or 3D-OU
             m_pose = Translation({0.f, 0.f, -3.0f});
             XrVector3f scale{1.8, 1.0, 1.0};
             m_scale = scale;
-
-            glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD), VERTICES_COORD, GL_STATIC_DRAW);
+            if (m_options->VideoMode == "3D-SBS") {
+                glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD), VERTICES_COORD, GL_STATIC_DRAW);
+            } else if (m_options->VideoMode == "3D-OU") {
+                glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD_OU), VERTICES_COORD_OU, GL_STATIC_DRAW);
+            }
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(s_indices), s_indices, GL_STATIC_DRAW);
             glVertexAttribPointer(apos, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
             glVertexAttribPointer(atex, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
         } else if (m_options->VideoMode == "360") {
-            //set pose and scale when video mode is 3D-SBS
+            //set pose and scale when video mode is 360
             m_pose = Translation({0.f, 0.f, 0.0f});
             XrVector3f scale{1.0, 1.0, 1.0};
             m_scale = scale;
@@ -408,7 +419,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             int width = frame->width;
             int height = frame->height;
             
-            if (m_options->VideoMode == "3D-SBS") {
+            if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU") {
                 GLuint aTexCoord = (GLuint) glGetAttribLocation(m_program, "aTexCoord");
                 int32_t offset = 3 + (eye * 2);
                 glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(offset * sizeof(float)));
@@ -426,7 +437,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
             glUniformMatrix4fv(m_modelViewProjectionUniformLocation, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&mvp));
             
-            if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "2D") {
+            if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU" || m_options->VideoMode == "2D") {
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             } else if (m_options->VideoMode == "360") {
                 glDrawElements(GL_TRIANGLES, m_indices.size(), GL_UNSIGNED_INT, 0);

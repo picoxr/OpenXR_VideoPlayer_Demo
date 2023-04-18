@@ -1457,7 +1457,7 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
                            {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(Vertex, TexCoord)}});
 
 
-        if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "2D") {
+        if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU" || m_options->VideoMode == "2D") {
             XrVector3f scale{1.8, 1.0, 1.0};
             m_scale = scale;
             m_pose = Translation({0.f, 0.f, m_disdance});
@@ -1566,6 +1566,19 @@ struct VulkanGraphicsPlugin : public IGraphicsPlugin {
                 s_vertexCoordData[1].TexCoord.x = 1.0f; s_vertexCoordData[1].TexCoord.y = 0.0f;
                 s_vertexCoordData[2].TexCoord.x = 1.0f; s_vertexCoordData[2].TexCoord.y = 1.0f;
                 s_vertexCoordData[3].TexCoord.x = 0.5f; s_vertexCoordData[3].TexCoord.y = 1.0f;  
+            }
+            m_drawBuffer.UpdateVertices(s_vertexCoordData.data(), s_vertexCoordData.size(), 0);
+        } else if (m_options->VideoMode == "3D-OU") {
+            if (eye == 0) {
+                s_vertexCoordData[0].TexCoord.x = 0.0f; s_vertexCoordData[0].TexCoord.y = 0.0f;
+                s_vertexCoordData[1].TexCoord.x = 1.0f; s_vertexCoordData[1].TexCoord.y = 0.0f;
+                s_vertexCoordData[2].TexCoord.x = 1.0f; s_vertexCoordData[2].TexCoord.y = 0.5f;
+                s_vertexCoordData[3].TexCoord.x = 0.0f; s_vertexCoordData[3].TexCoord.y = 0.5f;
+            } else {
+                s_vertexCoordData[0].TexCoord.x = 0.0f; s_vertexCoordData[0].TexCoord.y = 0.5f;
+                s_vertexCoordData[1].TexCoord.x = 1.0f; s_vertexCoordData[1].TexCoord.y = 0.5f;
+                s_vertexCoordData[2].TexCoord.x = 1.0f; s_vertexCoordData[2].TexCoord.y = 1.0f;
+                s_vertexCoordData[3].TexCoord.x = 0.0f; s_vertexCoordData[3].TexCoord.y = 1.0f;  
             }
             m_drawBuffer.UpdateVertices(s_vertexCoordData.data(), s_vertexCoordData.size(), 0);
         } else if (m_options->VideoMode == "360") {

@@ -15,7 +15,7 @@ struct Options {
 
     std::string AppSpace{"Local"};
 
-    std::string VideoMode{"3D-SBS"};              //Configurable: 2D, 3D-SBS, 360
+    std::string VideoMode{"3D-SBS"};              //Configurable: 2D, 3D-SBS, 3D-OU, 360
 
     std::string VideoFileName{"/sdcard/test3d.mp4"};
 

@@ -96,6 +96,7 @@ bool CPlayer::start() {
         int32_t audioSampleRate = 0;
         int32_t videoWidth = 0;
         int32_t videoHeight = 0;
+        int64_t videoDurationUs = 0;
 
         int count = 0;
         std::shared_ptr<oboe::AudioStream> audioStreamPlay;
@@ -110,6 +111,7 @@ bool CPlayer::start() {
                 videoTrackIndex = i;
                 AMediaFormat_getInt32(format, "width", &videoWidth);
                 AMediaFormat_getInt32(format, "height", &videoHeight);
+                AMediaFormat_getInt64(format, "durationUs", &videoDurationUs);
                 getAlignment(videoWidth, videoHeight, mAlignment);
                 videoCodec = AMediaCodec_createDecoderByType(mime);
                 if (videoCodec == nullptr) {
@@ -167,41 +169,46 @@ bool CPlayer::start() {
             AMediaFormat_delete(format);
         }
 
-        media_status_t status = AMediaCodec_start(videoCodec);
-        if (status != AMEDIA_OK) {
-            Log::Write(Log::Level::Error, Fmt("AMediaCodec_start error, status = %d", status));
-        } else {
-            Log::Write(Log::Level::Info, "video AMediaCodec_start successfully");
+        if (videoCodec) {
+            media_status_t status = AMediaCodec_start(videoCodec);
+            if (status != AMEDIA_OK) {
+                Log::Write(Log::Level::Error, Fmt("AMediaCodec_start error, status = %d", status));
+            } else {
+                Log::Write(Log::Level::Info, "video AMediaCodec_start successfully");
+            }
+            status = AMediaExtractor_selectTrack(mExtractor, videoTrackIndex);
+            if (status != AMEDIA_OK) {
+                Log::Write(Log::Level::Error, Fmt("video AMediaExtractor_selectTrack error, status = %d", status));
+                return false;
+            }
         }
-        status = AMediaCodec_start(audioCodec);
-        if (status != AMEDIA_OK) {
-            Log::Write(Log::Level::Error, Fmt("AMediaCodec_start error, status = %d", status));
-        } else {
-            Log::Write(Log::Level::Info, "audio AMediaCodec_start successfully");
+        if (audioCodec) {
+            media_status_t status = AMediaCodec_start(audioCodec);
+            if (status != AMEDIA_OK) {
+                Log::Write(Log::Level::Error, Fmt("AMediaCodec_start error, status = %d", status));
+            } else {
+                Log::Write(Log::Level::Info, "audio AMediaCodec_start successfully");
+            }
+            status = AMediaExtractor_selectTrack(mExtractor, audioTrackIndex);
+            if (status != AMEDIA_OK) {
+                Log::Write(Log::Level::Error, Fmt("audio AMediaExtractor_selectTrack error, status = %d", status));
+                return false;
+            }          
         }
-        uint64_t pts_offset = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-        //select audio track and video track
-        status = AMediaExtractor_selectTrack(mExtractor, audioTrackIndex);
-        if (status != AMEDIA_OK) {
-            Log::Write(Log::Level::Error, Fmt("audio AMediaExtractor_selectTrack error, status = %d", status));
-            return false;
-        }
-        status = AMediaExtractor_selectTrack(mExtractor, videoTrackIndex);
-        if (status != AMEDIA_OK) {
-            Log::Write(Log::Level::Error, Fmt("video AMediaExtractor_selectTrack error, status = %d", status));
-            return false;
-        }
+        uint64_t pts_offset = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
         while (true) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
             int32_t index = AMediaExtractor_getSampleTrackIndex(mExtractor);
             int64_t pts = AMediaExtractor_getSampleTime(mExtractor);
+            pts += pts_offset;
             if (index < 0) {
                 // Play from the beginning when reach end of the file
-                Log::Write(Log::Level::Info, Fmt("the video file is end"));
+                Log::Write(Log::Level::Info, Fmt("the video file is end, index:%d", index));
                 AMediaExtractor_seekTo(mExtractor, 0, AMEDIAEXTRACTOR_SEEK_CLOSEST_SYNC);
+                pts_offset += videoDurationUs;
             } else if (index == audioTrackIndex) {
                 //audio
                 ssize_t bufferIdx_a = AMediaCodec_dequeueInputBuffer(audioCodec, 1);
@@ -214,7 +221,7 @@ bool CPlayer::start() {
                     }
                     AMediaExtractor_advance(mExtractor);
                 } else {
-                    Log::Write(Log::Level::Error, Fmt("audio AMediaCodec_dequeueInputBuffer bufferIdx_a:%d", bufferIdx_a));
+                    Log::Write(Log::Level::Info, Fmt("audio AMediaCodec_dequeueInputBuffer bufferIdx_a:%d", bufferIdx_a));
                 }
             } else if (index == videoTrackIndex) {
                 //video
@@ -226,56 +233,64 @@ bool CPlayer::start() {
                     AMediaCodec_queueInputBuffer(videoCodec, bufferIdx, 0, size, pts, 0);
                     AMediaExtractor_advance(mExtractor);
                 } else {
-                    Log::Write(Log::Level::Error, Fmt("video AMediaCodec_dequeueInputBuffer bufferIdx:%d", bufferIdx));
+                    Log::Write(Log::Level::Info, Fmt("video AMediaCodec_dequeueInputBuffer bufferIdx:%d", bufferIdx));
                 }
             }
 
             //audio output buffer
-            AMediaCodecBufferInfo outputBufferInfo_a;
-            ssize_t bufferIdx_a = AMediaCodec_dequeueOutputBuffer(audioCodec, &outputBufferInfo_a, 1);
-            if (bufferIdx_a >= 0) {
-                uint8_t *outputBuffer = AMediaCodec_getOutputBuffer(audioCodec, bufferIdx_a, nullptr);
-                size_t outputDataSize = outputBufferInfo_a.size;
-                const uint32_t numSamples = outputDataSize / (audioChannelCount * sizeof(int16_t));
-                const int64_t timeout = int64_t(numSamples * 1.0 * oboe::kNanosPerMillisecond / audioSampleRate);
-                oboe::ResultWithValue<int32_t> ret = audioStreamPlay->write(outputBuffer, numSamples, timeout);
-                if (ret.value() == numSamples) {
-                    AMediaCodec_releaseOutputBuffer(audioCodec, bufferIdx_a, true);
-                } else {
-                    Log::Write(Log::Level::Error, Fmt("audio write ret:%d", ret));
-                    AMediaCodec_releaseOutputBuffer(audioCodec, bufferIdx_a, true);
+            if (audioCodec) {
+                AMediaCodecBufferInfo outputBufferInfo_a;
+                ssize_t bufferIdx_a = AMediaCodec_dequeueOutputBuffer(audioCodec, &outputBufferInfo_a, 1);
+                if (bufferIdx_a >= 0) {
+                    uint8_t *outputBuffer = AMediaCodec_getOutputBuffer(audioCodec, bufferIdx_a, nullptr);
+                    size_t outputDataSize = outputBufferInfo_a.size;
+                    const uint32_t numSamples = outputDataSize / (audioChannelCount * sizeof(int16_t));
+                    const int64_t timeout = int64_t(numSamples * 1.0 * oboe::kNanosPerMillisecond / audioSampleRate);
+                    oboe::ResultWithValue<int32_t> ret = audioStreamPlay->write(outputBuffer, numSamples, timeout);
+                    if (ret.value() == numSamples) {
+                        AMediaCodec_releaseOutputBuffer(audioCodec, bufferIdx_a, true);
+                    } else {
+                        Log::Write(Log::Level::Error, Fmt("audio write ret:%d", ret));
+                        AMediaCodec_releaseOutputBuffer(audioCodec, bufferIdx_a, true);
+                    }
                 }
             }
             
             //video output buffer
-            AMediaCodecBufferInfo outputBufferInfo;
-            ssize_t bufferIdx = AMediaCodec_dequeueOutputBuffer(videoCodec, &outputBufferInfo, 1);
-            if (bufferIdx >= 0) {
-                if (outputBufferInfo.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) {
-                    Log::Write(Log::Level::Error, Fmt("video codec end"));
-                }
-                uint8_t *outputBuffer = AMediaCodec_getOutputBuffer(videoCodec, bufferIdx, nullptr);
-                if (outputBuffer) {
-                    std::shared_ptr<MediaFrame> frame = std::make_shared<MediaFrame>();
-                    frame->type = mediaTypeVideo;
-                    frame->width = videoWidth;
-                    frame->height = videoHeight;
-                    frame->pts = (outputBufferInfo.presentationTimeUs + pts_offset) / 1000;
-                    frame->number = 0;
-                    frame->data = outputBuffer + outputBufferInfo.offset;
-                    frame->size = outputBufferInfo.size;
-                    frame->bufferIndex = bufferIdx;
-                    
-                    mMediaListMutex.lock();
-                    mMediaList.push_back(frame);
-                    //Log::Write(Log::Level::Info, Fmt("mMediaList size:%d", mMediaList.size()));
-                    mMediaListMutex.unlock();
+            if (videoCodec) {
+                AMediaCodecBufferInfo outputBufferInfo;
+                ssize_t bufferIdx = AMediaCodec_dequeueOutputBuffer(videoCodec, &outputBufferInfo, 1);
+                if (bufferIdx >= 0) {
+                    if (outputBufferInfo.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) {
+                        Log::Write(Log::Level::Error, Fmt("video codec end"));
+                    }
+                    uint8_t *outputBuffer = AMediaCodec_getOutputBuffer(videoCodec, bufferIdx, nullptr);
+                    if (outputBuffer) {
+                        std::shared_ptr<MediaFrame> frame = std::make_shared<MediaFrame>();
+                        frame->type = mediaTypeVideo;
+                        frame->width = videoWidth;
+                        frame->height = videoHeight;
+                        frame->pts = outputBufferInfo.presentationTimeUs / 1000;
+                        frame->number = 0;
+                        frame->data = outputBuffer + outputBufferInfo.offset;
+                        frame->size = outputBufferInfo.size;
+                        frame->bufferIndex = bufferIdx;
+                        
+                        mMediaListMutex.lock();
+                        mMediaList.push_back(frame);
+                        //Log::Write(Log::Level::Error, Fmt("mMediaList size:%d", mMediaList.size()));
+                        mMediaListMutex.unlock();
+                    }
                 }
             }
         }
         Log::Write(Log::Level::Error, Fmt("exit thread......"));
     }).detach();
 
+    return true;
+}
+
+bool CPlayer::stop() {
     return true;
 }
 
@@ -292,7 +307,7 @@ bool CPlayer::releaseFrame(std::shared_ptr<MediaFrame> &frame) {
     if (frame.get() == nullptr) {
         return true;
     }
-    uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 1000;  //in millisecond
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();  //in millisecond
     if (now < frame->pts) {
         return false;
     }
