@@ -5,11 +5,17 @@
   - v2.1.0
   
 ## Description
-  - This demo shows how to implement 360, 3D-SBS, 2D VR video player with Pico OpenXR SDK use OpenGLES and Vulkan.
+  - This demo shows how to implement 360, 3D-SBS, 3D-OU, 2D VR video player with Pico OpenXR SDK use OpenGLES and Vulkan.
+  - Fully use Android NDK C++, no java code.
+  - Use AMediaCodec to decode.
+  - Rendering yuv-nv12 with OpenGLES and vulkan.
 
 ## Usage
   - Scene： 3D-side-by-side(3D-SBS)
     Demo of VR video player for 3D side-by-side (left-right) video format.
+
+  - Scene： 3D-OverUnder(3D-OU)
+    Demo of VR video player for 3D over under (over-under) video format.
 
   - Scene： 360 
     Demo of VR video player for 360 video format.
