@@ -25,3 +25,6 @@
 
 ### How select video mode and Specify video file name
   In the `cpp/app/options.h` file `VideoMode` field indicates videomode and `VideoFileName` indicates the video file used to playback. GraphicsPlugin filed indicates what rendering API to use, you can specify `OpenGLES` or `Vulkan2`.
+
+## Note
+  For more OpenXR demos, please go here [**OpenXR demo all in one**](https://github.com/picoxr/OpenXR_Demos).
