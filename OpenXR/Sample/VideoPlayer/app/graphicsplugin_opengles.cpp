@@ -7,6 +7,7 @@
 #include "geometry.h"
 #include "graphicsplugin.h"
 #include "options.h"
+#include "main.h"
 
 #ifdef XR_USE_GRAPHICS_API_OPENGL_ES
 
@@ -28,23 +29,16 @@ static const char* s_vertexShader = R"_(
     }
 )_";
 
-static const char* s_fragmentShader = R"_(
+static const char* s_fragmentShader_OES=R"_(
     #version 320 es
+    #extension GL_OES_EGL_image_external_essl3:require
     precision mediump float;
     in vec2 vTexCoord;
-    uniform sampler2D yTexture;
-    uniform sampler2D uvTexture;
+    uniform samplerExternalOES yTexture;
     layout(location = 0) out vec4 outColor;
     void main() {
-        vec3 yuv;
-        vec3 rgb;
-        yuv.r = texture(yTexture, vTexCoord).r;
-        yuv.g = texture(uvTexture, vTexCoord).r - 0.5;
-        yuv.b = texture(uvTexture, vTexCoord).a - 0.5;
-        rgb = mat3 (1.0,      1.0,      1.0,
-                    0.0,     -0.21482,  2.12798,
-                    1.28033, -0.38059,  0.0) * yuv;
-        outColor = vec4(rgb, 1);
+        vec4 texColor=texture(yTexture,vTexCoord);
+        outColor=vec4(texColor.xyz,1.0);
     }
 )_";
 
@@ -185,7 +179,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         CheckShader(vertexShader_v2);
 
         GLuint fragmentShader_v2 = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragmentShader_v2, 1, &s_fragmentShader, nullptr);
+        glShaderSource(fragmentShader_v2, 1, &s_fragmentShader_OES, nullptr);
+
         glCompileShader(fragmentShader_v2);
         CheckShader(fragmentShader_v2);
 
@@ -202,7 +197,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         GLuint apos = (GLuint) glGetAttribLocation(m_program, "aPosition");
         GLuint atex = (GLuint) glGetAttribLocation(m_program, "aTexCoord");
         GLuint texturey = (GLuint) glGetUniformLocation(m_program, "yTexture");
-        GLuint textureuv = (GLuint) glGetUniformLocation(m_program, "uvTexture");  
         m_modelViewProjectionUniformLocation = glGetUniformLocation(m_program, "ModelViewProjection");      
 
         glGenVertexArrays(1, &m_vao);
@@ -219,7 +213,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU") {
             //set pose and scale when video mode is 3D-SBS or 3D-OU
             m_pose = Translation({0.f, 0.f, -3.0f});
-            XrVector3f scale{1.8, 1.0, 1.0};
+            XrVector3f scale{1.8, 2.0, 1.0};
             m_scale = scale;
             if (m_options->VideoMode == "3D-SBS") {
                 glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD), VERTICES_COORD, GL_STATIC_DRAW);
@@ -242,7 +236,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             glVertexAttribPointer(atex, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         } else if (m_options->VideoMode == "2D") {
             m_pose = Translation({0.f, 0.f, -3.0f});
-            XrVector3f scale{1.8, 1.0, 1.0};
+            XrVector3f scale{1.8, 2.0, 1.0};
             m_scale = scale;
 
             glBufferData(GL_ARRAY_BUFFER, sizeof(VERTICES_COORD_2D), VERTICES_COORD_2D, GL_STATIC_DRAW);
@@ -251,23 +245,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             glVertexAttribPointer(atex, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
         }
 
-        glUniform1i(texturey, 0); 
-        glUniform1i(textureuv, 1);
+        glUniform1i(texturey, 0);
 
-        //texture
-        glGenTextures(2, m_textureId);
-        glBindTexture(GL_TEXTURE_2D, m_textureId[0]);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glBindTexture(GL_TEXTURE_2D, m_textureId[1]);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
@@ -415,10 +394,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         XrMatrix4x4f_CreateTranslationRotationScale(&model, &m_pose.position, &m_pose.orientation, &m_scale);
         XrMatrix4x4f_Multiply(&mvp, &vp, &model);
 
-        if (frame.get()) {
-            int width = frame->width;
-            int height = frame->height;
-            
+        
+        {
             if (m_options->VideoMode == "3D-SBS" || m_options->VideoMode == "3D-OU") {
                 GLuint aTexCoord = (GLuint) glGetAttribLocation(m_program, "aTexCoord");
                 int32_t offset = 3 + (eye * 2);
@@ -426,14 +403,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
                 glEnableVertexAttribArray(aTexCoord);
             } else if (m_options->VideoMode == "2D" || m_options->VideoMode == "360") {
             }
-
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, m_textureId[0]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data);
-
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, m_textureId[1]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, width / 2, height / 2, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, frame->data + (width * height));
+            glBindTexture(GL_TEXTURE_EXTERNAL_OES, gVideoGLTex->mGlTexture);
 
             glUniformMatrix4fv(m_modelViewProjectionUniformLocation, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&mvp));
             

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #pragma once
-
+#include <media/NdkMediaExtractor.h>
 struct IOpenXrProgram {
     virtual ~IOpenXrProgram() = default;
 
@@ -36,7 +36,7 @@ struct IOpenXrProgram {
     // Create and submit a frame.
     virtual void RenderFrame() = 0;
 
-    virtual bool StartPlayer() = 0;
+    virtual bool StartPlayer(ANativeWindow* NativeWinowP=NULL) = 0;
 };
 
 struct Swapchain {

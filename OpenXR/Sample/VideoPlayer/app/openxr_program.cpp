@@ -14,6 +14,7 @@
 #include <cmath>
 #include "player.h"
 #include <sys/time.h>
+#include "main.h"
 
 namespace {
 
@@ -1002,8 +1003,7 @@ struct OpenXrProgram : IOpenXrProgram {
         CHECK(viewCountOutput == m_swapchains.size());
 
         projectionLayerViews.resize(viewCountOutput);
-
-        std::shared_ptr<MediaFrame> frame = m_player->getFrame();
+        gCPPEnv->CallVoidMethod(gVideoSurfaceJObj,gUpdateTexImageMID);  
 
         // Render view to the appropriate part of the swapchain image.
         for (uint32_t i = 0; i < viewCountOutput; i++) {
@@ -1027,13 +1027,11 @@ struct OpenXrProgram : IOpenXrProgram {
             projectionLayerViews[i].subImage.imageRect.extent = {viewSwapchain.width, viewSwapchain.height};
 
             const XrSwapchainImageBaseHeader* const swapchainImage = m_swapchainImages[viewSwapchain.handle][swapchainImageIndex];
-            m_graphicsPlugin->RenderView(projectionLayerViews[i], swapchainImage, m_colorSwapchainFormat, frame, i);
+            m_graphicsPlugin->RenderView(projectionLayerViews[i], swapchainImage, m_colorSwapchainFormat, NULL, i);
 
             XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             CHECK_XRCMD(xrReleaseSwapchainImage(viewSwapchain.handle, &releaseInfo));
         }
-
-        m_player->releaseFrame(frame);
 
         layer.space = m_appSpace;
         layer.layerFlags = m_options.Parsed.EnvironmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND
@@ -1044,12 +1042,19 @@ struct OpenXrProgram : IOpenXrProgram {
         return true;
     }
 
-    bool StartPlayer() override {
+    bool StartPlayer(ANativeWindow* NativeWinowP=NULL) override
+    {
         m_player = new CPlayer();
-        if (m_player == nullptr) {
+        if (m_player == nullptr) 
+        {
             Log::Write(Log::Level::Error, Fmt("new CPlayer error"));
             return false;
         }
+        if (NativeWinowP)
+            m_player->mNativeWindow = NativeWinowP;
+        else
+            Log::Write(Log::Level::Error,"Failed NativeWinowP Null");
+
         m_player->setDataSource(m_options.VideoFileName.c_str(), m_videoWidth, m_videoHeight);
         m_player->start();
         Log::Write(Log::Level::Error, Fmt("m_videoWidth:%d, m_videoHeight:%d", m_videoWidth, m_videoHeight));

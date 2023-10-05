@@ -32,6 +32,7 @@ add_library( # Sets the name of the library.
         ${LOCAL_SOURCE}
         ${LOCAL_HEADERS}
 		${VULKAN_SHADERS}
+		${CMAKE_SOURCE_DIR}/app/VideoGLTex.cpp
         openxr_loader/include/common/gfxwrapper_opengl.c
 		)
 
