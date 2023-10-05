@@ -15,6 +15,7 @@ SPDX-License-Identifier: Apache-2.0
 	<uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 	<application android:allowBackup="false" android:label="OpenXR VideoPlayer Demo">
 
 		<!-- The activity is the built-in NativeActivity framework class. -->

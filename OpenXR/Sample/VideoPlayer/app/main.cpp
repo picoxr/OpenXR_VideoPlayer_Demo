@@ -9,13 +9,46 @@
 #include "platformplugin.h"
 #include "graphicsplugin.h"
 #include "openxr_program.h"
+#include "main.h"
 
-void ShowHelp() {
-    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.graphicsPlugin OpenGLES|Vulkan");
-    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.formFactor Hmd|Handheld");
-    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.viewConfiguration Stereo|Mono");
-    Log::Write(Log::Level::Info, "adb shell setprop debug.xr.blendMode Opaque|Additive|AlphaBlend");
+JavaVM* gVm = NULL;
+JNIEnv* gEnv = NULL;
+ANativeWindow* gNativeWindow=NULL;
+
+jobject gVideoSurfaceJObj;  
+jmethodID gNewSurfaceAndTexMID;
+jmethodID gUpdateTexImageMID;
+
+VideoGLTex* gVideoGLTex;
+JNIEnv* gCPPEnv = NULL;     
+
+extern "C" {
+void Java_com_khronos_player_VideoSurface_setSurface(JNIEnv *env,jclass clazz,jobject surface)
+{
+    gNativeWindow=ANativeWindow_fromSurface(env,surface);
 }
+
+jint JNI_OnLoad(JavaVM *vm, void *)
+{
+    gVm = vm;
+
+    if (vm->GetEnv((void**) &gEnv, JNI_VERSION_1_6) != JNI_OK)
+    {
+        Log::Write(Log::Level::Error,"Error JNI_OnLoad vm->GetEnv Error");
+        return -1;
+    }
+    const jclass VideoSurface_Class=gEnv->FindClass("com/khronos/player/VideoSurface");
+    const jmethodID constructor=gEnv->GetMethodID(VideoSurface_Class,"<init>","()V");
+
+    jobject object=gEnv->NewObject(VideoSurface_Class,constructor);
+
+    gVideoSurfaceJObj=gEnv->NewGlobalRef(object);
+
+    gNewSurfaceAndTexMID=gEnv->GetMethodID(VideoSurface_Class,"newSurfaceAndTex","(I)V");
+    gUpdateTexImageMID=gEnv->GetMethodID(VideoSurface_Class,"curSurfaceTexUpdate","()V");
+    return JNI_VERSION_1_6;
+}
+
 
 bool UpdateOptionsFromSystemProperties(Options& options) {
     char value[PROP_VALUE_MAX] = {};
@@ -87,15 +120,9 @@ static void app_handle_cmd(struct android_app* app, int32_t cmd) {
     }
 }
 
-/**
- * This is the main entry point of a native application that is using
- * android_native_app_glue.  It runs in its own thread, with its own
- * event loop for receiving input events and doing other things.
- */
-void android_main(struct android_app* app) {
+void android_main(struct android_app* app){
     try {
-        JNIEnv* Env;
-        app->activity->vm->AttachCurrentThread(&Env, nullptr);
+        app->activity->vm->AttachCurrentThread(&gCPPEnv, nullptr);
 
         AndroidAppState appState = {};
 
@@ -133,15 +160,17 @@ void android_main(struct android_app* app) {
             loaderInitInfoAndroid.applicationContext = app->activity->clazz;
             initializeLoader((const XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
         }
-
-        program->StartPlayer();
         program->CreateInstance();
         program->InitializeSystem();
         program->InitializeSession();
         program->CreateSwapchains();
-        
-        while (app->destroyRequested == 0) {
-            // Read all pending events.
+
+        gVideoGLTex=new VideoGLTex();
+        gCPPEnv->CallVoidMethod(gVideoSurfaceJObj,gNewSurfaceAndTexMID,gVideoGLTex->mGlTexture);
+
+        program->StartPlayer(gNativeWindow);
+
+        while (app->destroyRequested == 0){
             for (;;) {
                 int events;
                 struct android_poll_source* source;
@@ -183,4 +212,7 @@ void android_main(struct android_app* app) {
     {
         Log::Write(Log::Level::Error, "Unknown Error");
     }
+}
+
+
 }

@@ -45,12 +45,12 @@ public:
 
     std::shared_ptr<MediaFrame> getFrame();
 
-    bool releaseFrame(std::shared_ptr<MediaFrame> &frame);
-
 private:
     void getAlignment(int32_t &width, int32_t &height, int32_t alignment);
 
 public:
+    ANativeWindow* mNativeWindow=NULL;
+
     AMediaExtractor* mExtractor;
     AMediaCodec*     mVideoCodec;
     int32_t          mFd;
@@ -58,6 +58,7 @@ public:
     uint32_t         mAlignment = 16;  //16-byte alignment
 
     std::mutex       mMediaListMutex;
-    std::list<std::shared_ptr<MediaFrame>> mMediaList;
+    std::shared_ptr<MediaFrame> mMediaFrame;
+    int64_t mRenderstart = -1;
 
 };
